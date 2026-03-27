@@ -1,23 +1,36 @@
 # vphone-cli — Device Interaction Guide
 
-## SSH Port Mapping
+## Port Formula
 
-| VM  | SSH Port |
-|-----|----------|
-| vm4 | 2234     |
-| vm5 | 2235     |
-| vm6 | 2236     |
-| vm7 | 2237     |
-| vm8 | 2238     |
+`SSH port = 2230 + VM number`
 
-Formula: `2230 + VM number`
+| VM | SSH Port |
+|----|----------|
+| vm1 | 2231 |
+| vm2 | 2232 |
+| vm3 | 2233 |
+| vm8 | 2238 |
+| vm22 | 2252 |
+
+No UDID needed — everything routes by SSH port.
 
 ---
 
 ## Boot a Device
 
 ```bash
-make VM_DIR=vm8 boot
+make VM_DIR=vm1 boot
+```
+
+iproxy starts automatically on the correct port. SSH is available immediately after boot.
+
+---
+
+## Clone a Device (fast, no provisioning)
+
+```bash
+./clone_vm.sh vm1 vm2   # APFS CoW — instant, virtually free disk
+make VM_DIR=vm2 boot    # new UDID auto-generated, no setup wizard, Trust auto-tapped
 ```
 
 ---
@@ -25,42 +38,60 @@ make VM_DIR=vm8 boot
 ## SSH Access
 
 ```bash
-# 1. Find UDID
-./.limd/bin/idevice_id -l
-
-# 2. Start tunnel
-./.limd/bin/iproxy -u <UDID> <PORT> 22 &
-
-# 3. Connect (password: alpine for both)
-ssh root@127.0.0.1 -p <PORT>
-ssh mobile@127.0.0.1 -p <PORT>
+ssh root@127.0.0.1 -p 2231    # vm1 (password: alpine)
+ssh root@127.0.0.1 -p 2232    # vm2
 ```
+
+No manual iproxy needed — boot handles it.
+
+---
+
+## device.py — Automation
+
+All commands take `--ssh-port` to target a specific device.
+
+```bash
+# Tap
+python3 device.py --ssh-port 2231 tap 215 400
+python3 device.py --ssh-port 2231 tap 'Settings'
+python3 device.py --ssh-port 2231 tap_label 'Back'
+
+# Swipe presets: down, down_long, down_short, up, up_long, up_short, right, right_short, left, left_short
+python3 device.py --ssh-port 2231 swipe down
+python3 device.py --ssh-port 2231 swipe X1 Y1 X2 Y2
+
+# Navigation
+python3 device.py --ssh-port 2231 home
+
+# Apps
+python3 device.py --ssh-port 2231 launch_app com.apple.mobilesafari
+python3 device.py --ssh-port 2231 close_app com.apple.mobilesafari
+
+# Inspection
+python3 device.py --ssh-port 2231 screenshot screen.png   # saves to cwd
+python3 device.py --ssh-port 2231 dump_elements           # accessibility tree + OCR
+python3 device.py --ssh-port 2231 dump_ocr                # OCR only, faster
+```
+
+Frida connects via SSH tunnel automatically — no DDI or device pairing required.
 
 ---
 
 ## Screenshot
 
 ```bash
-./.limd/bin/idevicescreenshot -u <UDID> screenshot.png
+python3 device.py --ssh-port 2231 screenshot screen_vm1.png
 ```
+
+Saves to current working directory unless absolute path given.
 
 ---
 
 ## Install a Decrypted IPA Over SSH
 
 ```bash
-scp -P <PORT> app.ipa root@127.0.0.1:/tmp/app.ipa
-ssh root@127.0.0.1 -p <PORT> "appinst /tmp/app.ipa"
-```
-
----
-
-## Frida
-
-```bash
-frida-ps -U                          # processes on first device
-frida-ps --device <UDID>             # specific device
-frida -U -n "AppName" -l script.js   # attach with script
+scp -P 2231 app.ipa root@127.0.0.1:/tmp/app.ipa
+ssh root@127.0.0.1 -p 2231 "appinst /tmp/app.ipa"
 ```
 
 ---
@@ -68,39 +99,48 @@ frida -U -n "AppName" -l script.js   # attach with script
 ## Run a Shell Command on Device
 
 ```bash
-ssh root@127.0.0.1 -p <PORT> "<command>"
+ssh root@127.0.0.1 -p 2231 "<command>"
 ```
+
+---
+
+## Frida
+
+```bash
+frida-ps --device <UDID>             # list processes (find UDID via idevice_id -l)
+frida -U -n "AppName" -l script.js   # attach with script
+```
+
+Or use `device.py` which handles Frida over SSH tunnel internally.
 
 ---
 
 ## Check First-Boot Setup Progress
 
 ```bash
-tail -f /var/log/vphone_jb_setup.log
+ssh root@127.0.0.1 -p 2231 "tail -f /var/log/vphone_jb_setup.log"
 ```
 
 ---
 
-## Provision a New Device
+## Find UDID (if needed)
 
 ```bash
-VPHONE_SUDO_PASSWORD='<mac-password>' ./provision_device.sh vm9
+./.limd/bin/idevice_id -l
 ```
-
-After provisioning: boot with `make VM_DIR=vm9 boot`, go through the iOS setup wizard (skip everything, avoid Japan/EU region), wait ~10 min for on-device setup to complete, then SSH is available.
 
 ---
 
 ## Pre-installed on Every Device
 
-| Package         | Purpose                  |
-|-----------------|--------------------------|
-| OpenSSH         | SSH server (port 22)     |
-| Frida server    | Dynamic instrumentation  |
-| Sileo           | Package manager          |
-| TrollStore Lite | IPA installer (GUI)      |
-| appinst         | IPA installer (SSH/CLI)  |
-| libkrw0-tfp0    | Kernel read/write        |
+| Package | Purpose |
+|---------|---------|
+| OpenSSH | SSH server (port 22) |
+| Frida server | Dynamic instrumentation |
+| Sileo | Package manager |
+| TrollStore Lite | IPA installer (GUI) |
+| appinst | IPA installer (SSH/CLI) |
+| libkrw0-tfp0 | Kernel read/write |
 
 ---
 

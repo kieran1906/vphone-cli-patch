@@ -41,6 +41,8 @@ copy_file() {
 copy_file "CLAUDE.local.md"
 copy_file "VPHONE-CLI_SETUP-GUIDE.md"
 copy_file "provision_device.sh"
+copy_file "scripts/boot_proxy.sh"
+copy_file "clone_vm.sh"
 copy_file "scripts/cfw_install.sh"
 copy_file "scripts/cfw_install_jb.sh"
 copy_file "scripts/setup_tools.sh"
@@ -58,9 +60,19 @@ copy_file "agent/accessibility.ts"
 copy_file "agent/accessibility_agent.js"
 
 # ── Swift source files ─────────────────────────────────────────────────────────
+copy_file "sources/vphone-cli/VPhoneAppDelegate.swift"
 copy_file "sources/vphone-cli/VPhoneTouchServer.swift"
 copy_file "sources/vphone-cli/VPhoneWindowController.swift"
 copy_file "sources/vphone-cli/VPhoneVirtualMachineView.swift"
+
+# ── Makefile patches ───────────────────────────────────────────────────────────
+# Patch boot target to use boot_proxy.sh
+sed -i '' \
+    's|cd \$(VM_DIR) && "\$(CURDIR)/\$(BUNDLE_BIN)" \\\n\t\t--config ./config.plist|zsh \$(SCRIPTS)/boot_proxy.sh "\$(VM_DIR)" "\$(CURDIR)/\$(BUNDLE_BIN)"|' \
+    "$REPO/Makefile" 2>/dev/null || \
+perl -i -0pe 's|cd \$\(VM_DIR\) && "\$\(CURDIR\)/\$\(BUNDLE_BIN\)" \\\n\t\t--config \./config\.plist|zsh \$(SCRIPTS)/boot_proxy.sh "\$(VM_DIR)" "\$(CURDIR)/\$(BUNDLE_BIN)"|' \
+    "$REPO/Makefile"
+log "  Makefile (boot target)"
 
 # ── Permissions ────────────────────────────────────────────────────────────────
 chmod +x "$REPO/provision_device.sh"

@@ -108,7 +108,7 @@ kill_dfu() {
 # ── Step 1: Create VM ─────────────────────────────────────────
 log "=== [1/6] Creating VM ==="
 if [[ ! -d "$VM_DIR" ]]; then
-    make VM_DIR="$VM_DIR" vm_new CPU=4 MEMORY=4096 DISK_SIZE=64
+    make VM_DIR="$VM_DIR" vm_new CPU=4 MEMORY=2048 DISK_SIZE=64
 else
     warn "VM_DIR $VM_DIR already exists, skipping vm_new"
 fi

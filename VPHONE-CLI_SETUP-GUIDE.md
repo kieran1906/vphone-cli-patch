@@ -9,7 +9,7 @@ Getting a jailbroken virtual iPhone running on macOS using [vphone-cli](https://
 - Apple Silicon Mac (M1/M2/M3/M4)
 - macOS 15+ (Sequoia) or later
 - Xcode installed (not just Command Line Tools)
-- ~35GB free disk space per VM
+- ~10GB free disk space for first VM (clones are virtually free via APFS CoW)
 - Physical access to the Mac for two Recovery Mode reboots (one-time)
 
 ---
@@ -61,11 +61,10 @@ brew install aria2 ideviceinstaller wget gnu-tar openssl@3 ldid-procursus \
 ## Part 2b — Python Dependencies (for device.py automation)
 
 ```bash
-pip3 install frida pymobiledevice3 sshpass
+pip3 install frida sshpass
 ```
 
-- `frida` — attaches to SpringBoard for screenshots and touch injection
-- `pymobiledevice3` — lockdown/USB access to the VM (used by `dump_elements`)
+- `frida` — connects to frida-server on device via SSH tunnel for screenshots and accessibility dumps
 - `sshpass` — non-interactive SCP for pulling screenshots off the device
 
 ---
@@ -104,37 +103,23 @@ make
 | `scripts/cfw_install_jb.sh` | Removes `seputil --gigalocker-init` (hangs in VM); injects `com.vphone.sshd` LaunchDaemon so sshd starts on every boot |
 | `scripts/vphone_jb_setup.sh` | Full first-boot setup: installs OpenSSH, Sileo, TrollStore Lite, appinst, Frida server; sets root password; configures sshd; sets JB PATH |
 | `scripts/vphone_sshd_start.sh` | New — deployed to `/cores/`, started by launchd on every boot to keep sshd alive |
-| `provision_device.sh` | New — fully automated provisioning script replacing the manual two-terminal workflow |
-| `CLAUDE.local.md` | New — Claude Code instructions for device interaction |
+| `scripts/boot_proxy.sh` | New — auto-discovers device UDID on boot, starts iproxy on correct port, auto-taps Trust dialog |
+| `provision_device.sh` | Fully automated provisioning script; new devices default to 2GB RAM |
+| `clone_vm.sh` | New — instant VM cloning via APFS CoW with fresh identity generation |
+| `CLAUDE.local.md` | Device interaction reference |
 
 **Swift source (vphone-cli app)**
 
 | File | What was changed |
 |------|-----------------|
-| `sources/vphone-cli/VPhoneTouchServer.swift` | **New file** — Unix socket server at `/tmp/vphone-touch.sock`; accepts newline-delimited JSON commands (`tap`, `swipe`, `home`, `app_launch`, `app_terminate`) and drives touch/app control on the VM without needing the GUI window focused |
-| `sources/vphone-cli/VPhoneWindowController.swift` | Passes `control` into `VPhoneTouchServer.start()` so `app_launch`/`app_terminate` commands have access to `VPhoneControl` |
+| `sources/vphone-cli/VPhoneAppDelegate.swift` | Passes VM directory name to touch server |
+| `sources/vphone-cli/VPhoneTouchServer.swift` | Socket path now per-VM (`/tmp/vphone-touch-vm1.sock`) — multiple VMs no longer conflict |
+| `sources/vphone-cli/VPhoneWindowController.swift` | Passes VM name into touch server init |
 | `sources/vphone-cli/VPhoneVirtualMachineView.swift` | Minor fix for drag-and-drop IPA install compatibility |
 
 **Python UI automation (`device.py`)**
 
-New file — high-level automation API for the VM. Import it or run it as a CLI:
-
-```bash
-python3 device.py tap 215 400          # tap at coordinates
-python3 device.py tap 'Settings'       # OCR search and tap
-python3 device.py tap_label 'Safari'   # find by accessibility label and tap (works for icon-only elements)
-python3 device.py tap_label 'Back'     # works for Back button, dock icons, CC controls, etc.
-python3 device.py dump_elements        # list all visible elements with positions (accessibility tree, dynamic process detection)
-python3 device.py dump_ocr             # fast OCR-only dump — all visible text with x,y coordinates (no Frida attach, Vision only)
-python3 device.py swipe down           # scroll using preset
-python3 device.py swipe up_long
-python3 device.py home
-python3 device.py launch_app com.apple.mobilesafari
-python3 device.py close_app com.apple.mobilesafari
-python3 device.py screenshot screen.png
-```
-
-Requires Python packages (see Part 2b below).
+No UDID required — everything routes by SSH port. See full command reference below.
 
 **Frida agents (`agent/`)**
 
@@ -165,7 +150,7 @@ All tools installed.
 Run the provision script. It handles everything automatically — VM creation, firmware download, patching, restore, ramdisk, jailbreak install, and first boot.
 
 ```bash
-VPHONE_SUDO_PASSWORD='12345678' ./provision_device.sh
+VPHONE_SUDO_PASSWORD='your-mac-password' ./provision_device.sh
 ```
 
 To provision a specific named VM:
@@ -175,7 +160,7 @@ VPHONE_SUDO_PASSWORD='your-mac-password' ./provision_device.sh vm2
 
 The script auto-names VMs (`vm2`, `vm3`, etc.) if no name is given.
 
-**This takes 20-40 minutes.** When complete the script exits and prints instructions — the device is NOT booted automatically.
+**This takes 20-40 minutes.** New VMs provision with 2GB RAM by default.
 
 ### After provisioning
 
@@ -183,6 +168,8 @@ The script auto-names VMs (`vm2`, `vm3`, etc.) if no name is given.
 ```bash
 make VM_DIR=vm2 boot
 ```
+
+iproxy starts automatically on the correct port — no manual tunnel setup needed.
 
 **2. Go through the iOS setup wizard:**
 - Select language and region
@@ -192,45 +179,107 @@ make VM_DIR=vm2 boot
 
 **3. Wait 5-10 minutes** for `vphone_jb_setup.sh` to run in the background (installs OpenSSH, Frida, Sileo, TrollStore).
 
-**4. Start the SSH tunnel and connect:**
+**4. SSH is now available:**
 ```bash
-# Start tunnel (UDID shown in provisioning output)
-./.limd/bin/iproxy -u <UDID> 2232 22
-
-# Connect
-ssh mobile@127.0.0.1 -p 2232
-ssh root@127.0.0.1 -p 2232    # password: alpine
+ssh root@127.0.0.1 -p 2232   # password: alpine
 ```
 
-The exact commands with your UDID and port are printed at the end of the provision script.
+Port formula: `2230 + VM number` (vm2=2232, vm3=2233, vm8=2238, vm22=2252)
+
+---
+
+## Cloning a Device (fast — no provisioning needed)
+
+The fastest way to get a new device is to clone an existing provisioned one. Uses APFS copy-on-write so the clone costs virtually no extra disk space initially.
+
+```bash
+./clone_vm.sh vm1 vm2
+make VM_DIR=vm2 boot
+```
+
+- Clones in seconds
+- New UDID generated automatically on first boot
+- **No setup wizard** — NVRAM state is preserved from source VM
+- iproxy auto-starts on the correct port
+- Trust dialog auto-tapped
 
 ---
 
 ## Subsequent Boots
 
-After initial setup, just run:
 ```bash
 make VM_DIR=vm2 boot
 ```
 
-No re-jailbreaking needed — patches are baked into the firmware.
+iproxy starts automatically. SSH is available at `root@127.0.0.1 -p <port>` immediately.
+
+---
+
+## Port Reference
+
+| VM | SSH Port |
+|----|----------|
+| vm1 | 2231 |
+| vm2 | 2232 |
+| vm3 | 2233 |
+| vm8 | 2238 |
+| vm22 | 2252 |
+
+Formula: `2230 + VM number`
+
+---
+
+## device.py — Automation Command Reference
+
+All commands use `--ssh-port` to target a specific device. No UDID needed.
+
+```bash
+# Tap
+python3 device.py --ssh-port 2231 tap 215 400          # tap by coordinates
+python3 device.py --ssh-port 2231 tap 'Settings'       # OCR search and tap
+python3 device.py --ssh-port 2231 tap_label 'Safari'   # tap by accessibility label
+
+# Swipe
+python3 device.py --ssh-port 2231 swipe down
+python3 device.py --ssh-port 2231 swipe down_long
+python3 device.py --ssh-port 2231 swipe down_short
+python3 device.py --ssh-port 2231 swipe up
+python3 device.py --ssh-port 2231 swipe up_long
+python3 device.py --ssh-port 2231 swipe up_short
+python3 device.py --ssh-port 2231 swipe right
+python3 device.py --ssh-port 2231 swipe left
+python3 device.py --ssh-port 2231 swipe X1 Y1 X2 Y2   # custom coordinates
+
+# Navigation
+python3 device.py --ssh-port 2231 home
+
+# Apps
+python3 device.py --ssh-port 2231 launch_app com.apple.mobilesafari
+python3 device.py --ssh-port 2231 close_app com.apple.mobilesafari
+
+# Inspection
+python3 device.py --ssh-port 2231 screenshot screen.png        # saves to current dir
+python3 device.py --ssh-port 2231 dump_elements                # accessibility tree + OCR
+python3 device.py --ssh-port 2231 dump_ocr                     # OCR only, no Frida attach
+```
+
+Frida connects via SSH tunnel automatically — no DDI or device pairing required.
 
 ---
 
 ## Running Multiple Devices
 
-Each VM is ~32GB on disk and uses 4GB RAM. With 18GB total RAM, run two VMs at a time.
+Each VM uses ~2GB RAM. Boot as many as your Mac has headroom for.
 
-Boot both:
 ```bash
-make VM_DIR=vm2 boot   # terminal 1
-make VM_DIR=vm3 boot   # terminal 2
+make VM_DIR=vm1 boot   # terminal 1 — SSH on 2231
+make VM_DIR=vm2 boot   # terminal 2 — SSH on 2232
 ```
 
-SSH into each (each gets its own port):
+Target specific devices with `--ssh-port`:
 ```bash
-ssh root@127.0.0.1 -p 2232   # vm2
-ssh root@127.0.0.1 -p 2233   # vm3
+python3 device.py --ssh-port 2231 tap 'Settings'   # vm1
+python3 device.py --ssh-port 2232 tap 'Settings'   # vm2
 ```
 
 ---
@@ -243,25 +292,22 @@ ssh root@127.0.0.1 -p 2233   # vm3
 | `restore_get_shsh` says no device | Start `make boot_dfu` first |
 | `ramdisk_send` says unable to connect | Start fresh `make boot_dfu` — previous session ended |
 | Black screen after ElleKit install | Normal — reboot with `make boot` |
-| Frida pairing error | Run `pkill -f frida` then retry |
-| SSH gives `UNIX authentication refused` | Run `vphone_jb_setup.sh` not yet complete — wait 5-10 min after reaching home screen |
+| SSH gives `UNIX authentication refused` | `vphone_jb_setup.sh` not yet complete — wait 5-10 min after reaching home screen |
+| Frida protocol error | Frida version mismatch — run `apt-get install -y re.frida.server` on device and `pip3 install --upgrade frida` on Mac |
+| Screenshot from wrong device | Ensure `--ssh-port` matches the VM you intend to target |
 
 ---
 
 ## What `provision_device.sh` Does
 
-The provision script replaces what previously required two terminals and manual coordination. Here's what it runs:
-
 | Step | Command | What it does |
 |------|---------|--------------|
-| 1 | `vm_new` | Creates the VM directory, disk image, and config |
+| 1 | `vm_new` | Creates the VM directory, disk image (2GB RAM), and config |
 | 2 | `fw_prepare` | Downloads the iOS IPSW (~10GB, cached after first run) and merges cloudOS |
 | 3 | `fw_patch_jb` | Patches iBSS, iBEC, kernelcache and other firmware components for jailbreak |
 | 4 | `boot_dfu` + `restore` | Boots VM in DFU mode and restores the patched firmware |
 | 5 | `ramdisk_build` + `ramdisk_send` | Builds a custom ramdisk and boots into it |
 | 6 | `cfw_install_jb` | Over SSH to the ramdisk: installs procursus bootstrap, BaseBin hooks, launchdhook, TweakLoader, and deploys first-boot setup daemon |
-
-Script exits and prints instructions. Boot, wizard, and SSH are manual steps (see above).
 
 ### What `vphone_jb_setup.sh` does (runs on-device at first boot)
 

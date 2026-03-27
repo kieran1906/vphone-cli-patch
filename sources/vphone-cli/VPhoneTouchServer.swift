@@ -21,14 +21,10 @@ final class VPhoneTouchServer {
     private(set) weak var keyHelper: VPhoneKeyHelper?
     private(set) weak var control: VPhoneControl?
 
-    init(screenWidth: Int, screenHeight: Int, screenScale: Double, ecid: String?) {
+    init(screenWidth: Int, screenHeight: Int, screenScale: Double, vmName: String) {
         screenW = Double(screenWidth) / screenScale
         screenH = Double(screenHeight) / screenScale
-        if let ecid {
-            socketPath = "/tmp/vphone-touch-\(ecid).sock"
-        } else {
-            socketPath = "/tmp/vphone-touch.sock"
-        }
+        socketPath = "/tmp/vphone-touch-\(vmName).sock"
     }
 
     func start(view: VPhoneVirtualMachineView, keyHelper: VPhoneKeyHelper?, control: VPhoneControl?) {

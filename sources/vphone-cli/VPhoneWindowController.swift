@@ -19,7 +19,7 @@ class VPhoneWindowController: NSObject, NSToolbarDelegate {
 
     func showWindow(
         for vm: VZVirtualMachine, screenWidth: Int, screenHeight: Int, screenScale: Double,
-        keyHelper: VPhoneKeyHelper, control: VPhoneControl, ecid: String?
+        keyHelper: VPhoneKeyHelper, control: VPhoneControl, ecid: String?, vmName: String
     ) {
         self.control = control
 
@@ -77,7 +77,7 @@ class VPhoneWindowController: NSObject, NSToolbarDelegate {
         touchIDMonitor = monitor
 
         let ts = VPhoneTouchServer(
-            screenWidth: screenWidth, screenHeight: screenHeight, screenScale: screenScale, ecid: ecid
+            screenWidth: screenWidth, screenHeight: screenHeight, screenScale: screenScale, vmName: vmName
         )
         ts.start(view: view, keyHelper: keyHelper, control: control)
         touchServer = ts
