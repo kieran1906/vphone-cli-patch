@@ -127,7 +127,6 @@ def _mac_swipe(x1, y1, x2, y2, steps=20):
     return True
 
 UDID     = os.environ.get("VPHONE_UDID", "0000FE01-29E105426CE10DD4")
-SSH_PORT = int(os.environ.get("VPHONE_SSH_PORT", "2231"))
 SCREEN_W = 430
 SCREEN_H = 932
 
@@ -267,7 +266,7 @@ def _frida_device():
                 ["sshpass", "-p", "alpine",
                  "ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no",
                  "-N", "-L", f"{local_port}:127.0.0.1:27042",
-                 "root@127.0.0.1", "-p", str(SSH_PORT)],
+                 "root@127.0.0.1", "-p", str(int(os.environ.get("VPHONE_SSH_PORT", "2231")))],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
             )
             time.sleep(0.5)
@@ -730,7 +729,7 @@ USAGE
   python3 device.py [--udid UDID] COMMAND [args...]
 
   --udid UDID         Target device UUID (overrides $VPHONE_UDID env var and default)
-  --ssh-port PORT     SSH port for frida tunnel fallback (overrides $VPHONE_SSH_PORT, default 2231)
+
 
 COMMANDS
   tap X Y               Tap at iOS logical coordinates (430×932 space)
@@ -772,19 +771,12 @@ EXAMPLES
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    while args and args[0].startswith("--"):
-        if args[0] == "--udid":
-            if len(args) < 2:
-                print("error: --udid requires a value", file=sys.stderr)
-                sys.exit(1)
-            UDID = args[1]; args = args[2:]
-        elif args[0] == "--ssh-port":
-            if len(args) < 2:
-                print("error: --ssh-port requires a value", file=sys.stderr)
-                sys.exit(1)
-            SSH_PORT = int(args[1]); args = args[2:]
-        else:
-            break
+    if args and args[0] == "--udid":
+        if len(args) < 2:
+            print("error: --udid requires a value", file=sys.stderr)
+            sys.exit(1)
+        UDID = args[1]
+        args = args[2:]
     if not args or args[0] in ("help", "--help", "-h"):
         print(_HELP)
         sys.exit(0)
