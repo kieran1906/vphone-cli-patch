@@ -67,10 +67,8 @@ copy_file "sources/vphone-cli/VPhoneVirtualMachineView.swift"
 
 # ── Makefile patches ───────────────────────────────────────────────────────────
 # Patch boot target to use boot_proxy.sh
-sed -i '' \
-    's|cd \$(VM_DIR) && "\$(CURDIR)/\$(BUNDLE_BIN)" \\\n\t\t--config ./config.plist|zsh \$(SCRIPTS)/boot_proxy.sh "\$(VM_DIR)" "\$(CURDIR)/\$(BUNDLE_BIN)"|' \
-    "$REPO/Makefile" 2>/dev/null || \
-perl -i -0pe 's|cd \$\(VM_DIR\) && "\$\(CURDIR\)/\$\(BUNDLE_BIN\)" \\\n\t\t--config \./config\.plist|zsh \$(SCRIPTS)/boot_proxy.sh "\$(VM_DIR)" "\$(CURDIR)/\$(BUNDLE_BIN)"|' \
+perl -i -0pe \
+    's|cd \$\(VM_DIR\) && "\$\(CURDIR\)/\$\(BUNDLE_BIN\)" \\\n\t\t--config \./config\.plist|zsh \$(SCRIPTS)/boot_proxy.sh "\$(VM_DIR)" "\$(CURDIR)/\$(BUNDLE_BIN)"|' \
     "$REPO/Makefile"
 log "  Makefile (boot target)"
 
