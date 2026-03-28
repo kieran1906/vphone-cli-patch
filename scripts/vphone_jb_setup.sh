@@ -227,6 +227,20 @@ fi
 uicache -a 2>/dev/null || true
 log "  uicache refreshed"
 
+# Ensure trollstorehelper is on PATH — location varies by TrollStore Lite version
+if ! command -v trollstorehelper >/dev/null 2>&1; then
+    tsh=$(find /private/preboot -name trollstorehelper -not -path "*/TrollStoreLite.app/*" 2>/dev/null | head -1)
+    if [[ -n "$tsh" ]]; then
+        cp "$tsh" /var/jb/usr/bin/trollstorehelper
+        chmod +x /var/jb/usr/bin/trollstorehelper
+        log "  trollstorehelper copied to PATH from $tsh"
+    else
+        log "  WARNING: trollstorehelper not found — IPA installs via clone_vm.sh will fail"
+    fi
+else
+    log "  trollstorehelper already on PATH"
+fi
+
 # ═══════════ 7b INSTALL APPINST ══════════════════════════════
 log "[7b] Installing appinst..."
 if dpkg -s appinst >/dev/null 2>&1; then

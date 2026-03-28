@@ -91,7 +91,7 @@ Saves to current working directory unless absolute path given.
 
 ```bash
 scp -P 2231 app.ipa root@127.0.0.1:/tmp/app.ipa
-ssh root@127.0.0.1 -p 2231 "appinst /tmp/app.ipa"
+ssh root@127.0.0.1 -p 2231 "trollstorehelper install /tmp/app.ipa"
 ```
 
 ---
@@ -139,7 +139,7 @@ ssh root@127.0.0.1 -p 2231 "tail -f /var/log/vphone_jb_setup.log"
 | Frida server | Dynamic instrumentation |
 | Sileo | Package manager |
 | TrollStore Lite | IPA installer (GUI) |
-| appinst | IPA installer (SSH/CLI) |
+| trollstorehelper | IPA installer (SSH/CLI) |
 | libkrw0-tfp0 | Kernel read/write |
 
 ---
