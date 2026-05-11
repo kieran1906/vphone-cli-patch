@@ -5,7 +5,8 @@
 #   ./boot_vm.sh <VM_DIR> [--proxy]
 #
 # Options:
-#   --proxy   Start per-VM iproyal proxy forwarder on Mac and configure device
+#   --proxy         Start per-VM proxy forwarder on Mac and configure device (default: socks5/coldproxy)
+#   --proxy-mode X  Proxy mode: "socks5" (default) or "http" (iproyal)
 #
 # Examples:
 #   ./boot_vm.sh vm3
@@ -22,13 +23,17 @@ warn() { echo -e "${YELLOW}[boot]${NC} $*"; }
 info() { echo -e "${BLUE}[boot]${NC} $*"; }
 die()  { echo -e "${RED}[boot] FATAL:${NC} $*"; exit 1; }
 
-VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy]}"
+VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy] [--proxy-mode socks5|http] [--webrtc-disable]}"
 PROXY=0
+PROXY_MODE="socks5"
+DISABLE_WEBRTC=0
 
 shift
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --proxy) PROXY=1; shift ;;
+        --proxy-mode) PROXY_MODE="${2:?--proxy-mode requires socks5 or http}"; shift 2 ;;
+        --webrtc-disable) DISABLE_WEBRTC=1; shift ;;
         *) die "Unknown argument: $1" ;;
     esac
 done
@@ -81,8 +86,8 @@ BOOT_PID=$!
 
 # ── Proxy forwarder (Mac side, start early so it's ready by device boot) ──────
 if [[ $PROXY -eq 1 ]]; then
-    log "Starting proxy forwarder on port $PROXY_PORT..."
-    zsh scripts/proxy_start.sh "$VM_DIR" > "/tmp/vphone_proxy_${VM_DIR}.log" 2>&1 &
+    log "Starting proxy forwarder ($PROXY_MODE) on port $PROXY_PORT..."
+    zsh scripts/proxy_start.sh "$VM_DIR" --mode "$PROXY_MODE" > "/tmp/vphone_proxy_${VM_DIR}.log" 2>&1 &
     PROXY_PID=$!
 fi
 
@@ -105,6 +110,12 @@ else
     zsh scripts/proxy_clear_device.sh "$VM_DIR" || true
 fi
 
+# ── Disable WebRTC (prevent STUN IP leak) ─────────────────────────────────────
+if [[ $DISABLE_WEBRTC -eq 1 ]]; then
+    log "Disabling WebRTC in Safari..."
+    zsh scripts/disable_webrtc.sh "$VM_DIR" || warn "disable_webrtc.sh failed — WebRTC IP leak possible"
+fi
+
 # ── Frida SSH tunnel ──────────────────────────────────────────────────────────
 log "Starting Frida tunnel → localhost:$FRIDA_LOCAL_PORT"
 sshpass -p alpine ssh \
@@ -122,7 +133,7 @@ info "━━━━━━━━━━━━━━━━━━━━━━━━�
 info "  $VM_DIR is running"
 info "  SSH:   ssh root@127.0.0.1 -p $SSH_PORT  (pass: alpine)"
 if [[ $PROXY -eq 1 ]]; then
-info "  Proxy: 192.168.64.1:$PROXY_PORT → iproyal  (log: /tmp/vphone_proxy_${VM_DIR}.log)"
+info "  Proxy: 192.168.64.1:$PROXY_PORT → $PROXY_MODE  (log: /tmp/vphone_proxy_${VM_DIR}.log)"
 fi
 info "  Frida: frida -H 127.0.0.1:$FRIDA_LOCAL_PORT -n Safari -l ~/vphone_camera_hook.js --keepalive-interval 5"
 info ""
