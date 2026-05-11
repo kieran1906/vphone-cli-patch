@@ -126,6 +126,7 @@ def _mac_swipe(x1, y1, x2, y2, steps=20):
     return True
 
 SSH_PORT = int(os.environ.get("VPHONE_SSH_PORT", "2231"))
+FRIDA_PORT = int(os.environ.get("VPHONE_FRIDA_PORT", "0"))  # 0 = auto (spawn own tunnel)
 SCREEN_W = 430
 SCREEN_H = 932
 
@@ -250,18 +251,22 @@ _tunnel_proc = None
 def _frida_device():
     global _device, _tunnel_proc
     if _device is None:
-        import socket as _sock
-        with _sock.socket() as s:
-            s.bind(('127.0.0.1', 0))
-            local_port = s.getsockname()[1]
-        _tunnel_proc = subprocess.Popen(
-            ["sshpass", "-p", "alpine",
-             "ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no",
-             "-N", "-L", f"{local_port}:127.0.0.1:27042",
-             "root@127.0.0.1", "-p", str(SSH_PORT)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        time.sleep(0.5)
+        if FRIDA_PORT:
+            # Use already-open tunnel
+            local_port = FRIDA_PORT
+        else:
+            import socket as _sock
+            with _sock.socket() as s:
+                s.bind(('127.0.0.1', 0))
+                local_port = s.getsockname()[1]
+            _tunnel_proc = subprocess.Popen(
+                ["sshpass", "-p", "alpine",
+                 "ssh", "-o", "StrictHostKeyChecking=no", "-o", "PubkeyAuthentication=no",
+                 "-N", "-L", f"{local_port}:127.0.0.1:27042",
+                 "root@127.0.0.1", "-p", str(SSH_PORT)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            time.sleep(0.5)
         _device = frida.get_device_manager().add_remote_device(f"127.0.0.1:{local_port}")
     return _device
 
@@ -325,8 +330,9 @@ _SWIPE_PRESETS = {
     "down_short": (215, 600, 215, 350),
     # scroll up (finger swipes down)
     "up":         (215, 200, 215, 700),
-    "up_long":    (215, 150, 215, 820),
-    "up_short":   (215, 350, 215, 600),
+    "up_long":        (215, 150, 215, 820),
+    "up_short":       (215, 350, 215, 600),
+    "up_long_bottom": (215, 900, 215, 400),  # lock screen dismiss — swipe from home bar area
     # swipe right (back gesture / next page)
     "right":      (30,  466, 380, 466),
     "right_short":(100, 466, 330, 466),
@@ -722,6 +728,7 @@ USAGE
   python3 device.py [--udid UDID] COMMAND [args...]
 
   --ssh-port PORT     SSH port for device e.g. 2231, 2232 (overrides $VPHONE_SSH_PORT, default 2231)
+  --frida-port PORT   Reuse an existing frida tunnel on this local port (skips spawning SSH tunnel)
 
 
 COMMANDS
@@ -742,8 +749,9 @@ SWIPE PRESETS
   down_long   Scroll down (large)
   down_short  Scroll down (small)
   up          Scroll up (medium)
-  up_long     Scroll up (large)
-  up_short    Scroll up (small)
+  up_long          Scroll up (large)
+  up_short         Scroll up (small)
+  up_long_bottom   Swipe up from bottom (lock screen dismiss)
   right       Swipe right / back gesture
   right_short Swipe right (short)
   left        Swipe left
@@ -770,6 +778,11 @@ if __name__ == "__main__":
                 print("error: --ssh-port requires a value", file=sys.stderr)
                 sys.exit(1)
             SSH_PORT = int(args[1]); args = args[2:]
+        elif args[0] == "--frida-port":
+            if len(args) < 2:
+                print("error: --frida-port requires a value", file=sys.stderr)
+                sys.exit(1)
+            FRIDA_PORT = int(args[1]); args = args[2:]
         else:
             break
     if not args or args[0] in ("help", "--help", "-h"):

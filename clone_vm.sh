@@ -12,10 +12,10 @@
 #   --ipas   "..."  Space-separated list of .ipa URLs to install (optional)
 #
 # Examples:
-#   ./clone_vm.sh vm1 vm3
-#   ./clone_vm.sh vm1 vm3 --tweaks "https://example.com/tweak1.deb https://example.com/tweak2.deb"
-#   ./clone_vm.sh vm1 vm3 --ipas "https://example.com/app.ipa"
-#   ./clone_vm.sh vm1 vm3 --tweaks "https://example.com/t.deb" --ipas "https://example.com/app.ipa"
+#   ./clone_vm.sh vm2 vm3
+#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/tweak1.deb https://example.com/tweak2.deb"
+#   ./clone_vm.sh vm2 vm3 --ipas "https://example.com/app.ipa"
+#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/t.deb" --ipas "https://example.com/app.ipa"
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -67,7 +67,7 @@ log "Clone complete."
 
 # ── No installs requested — print hint and exit ───────────────────────────────
 if [[ ${#TWEAKS_URLS[@]} -eq 0 && ${#IPAS_URLS[@]} -eq 0 ]]; then
-    log "Done — boot with: make VM_DIR=$DST boot"
+    log "Done — boot with: ./boot_vm.sh $DST [--proxy]"
     exit 0
 fi
 
@@ -155,3 +155,4 @@ ssh_cmd "uicache 2>/dev/null || true" || true
 
 log "All done. $DST is running on SSH port $SSH_PORT."
 log "  ssh root@$SSH_HOST -p $SSH_PORT   (pass: $SSH_PASS)"
+log "  To boot next time: ./boot_vm.sh $DST [--proxy]"
