@@ -93,6 +93,9 @@ wait_for_ssh
 if [[ $PROXY -eq 1 ]]; then
     log "Configuring device proxy → 192.168.64.1:$PROXY_PORT"
     zsh scripts/proxy_setup_device.sh "$VM_DIR" || warn "proxy_setup_device.sh exited non-zero — check output above"
+else
+    log "Clearing device proxy (no --proxy flag)"
+    zsh scripts/proxy_clear_device.sh "$VM_DIR" || true
 fi
 
 # ── Frida SSH tunnel ──────────────────────────────────────────────────────────

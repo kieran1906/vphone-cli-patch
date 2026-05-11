@@ -42,7 +42,7 @@ if ! lsof -ti tcp:$SSH_PORT &>/dev/null; then
     sleep 2
 fi
 
-SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 root@127.0.0.1 -p $SSH_PORT)
+SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o ConnectTimeout=10 root@127.0.0.1 -p $SSH_PORT)
 
 # Test SSH
 echo "[proxy-device] Testing SSH on port $SSH_PORT..."
