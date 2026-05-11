@@ -31,6 +31,7 @@ SOCKS5_NO_ACCEPTABLE = 0xFF
 
 def socks5_connect(upstream_host, upstream_port, username, password, target_host, target_port):
     """Connect to target via upstream SOCKS5 proxy with username/password auth."""
+    import sys
     sock = socket.create_connection((upstream_host, upstream_port), timeout=30)
 
     try:
@@ -43,10 +44,12 @@ def socks5_connect(upstream_host, upstream_port, username, password, target_host
 
         resp = sock.recv(2)
         if len(resp) < 2 or resp[0] != 0x05:
+            print(f"[socks5] Bad greeting response: {resp.hex()}", file=sys.stderr)
             sock.close()
             return None
 
         chosen_method = resp[1]
+        print(f"[socks5] Auth method chosen: {chosen_method} (0=none, 2=userpass)", file=sys.stderr)
 
         if chosen_method == SOCKS5_USER_PASS:
             if not has_auth:
@@ -59,9 +62,12 @@ def socks5_connect(upstream_host, upstream_port, username, password, target_host
             sock.sendall(auth_msg)
             auth_resp = sock.recv(2)
             if len(auth_resp) < 2 or auth_resp[1] != 0x00:
+                print(f"[socks5] Auth FAILED for user: {username[:40]}...", file=sys.stderr)
                 sock.close()
                 return None
+            print(f"[socks5] Auth OK for user: {username[:60]}...", file=sys.stderr)
         elif chosen_method == SOCKS5_NO_AUTH:
+            print(f"[socks5] WARNING: upstream chose no-auth — session stickiness unlikely", file=sys.stderr)
             pass
         elif chosen_method == SOCKS5_NO_ACCEPTABLE:
             sock.close()
@@ -79,8 +85,11 @@ def socks5_connect(upstream_host, upstream_port, username, password, target_host
         # Response: VER REP RSV ATYP + bind addr/port
         resp = sock.recv(4)
         if len(resp) < 4 or resp[0] != 0x05 or resp[1] != 0x00:
+            rep_code = resp[1] if len(resp) > 1 else -1
+            print(f"[socks5] CONNECT to {target_host}:{target_port} FAILED (rep={rep_code})", file=sys.stderr)
             sock.close()
             return None
+        print(f"[socks5] CONNECT to {target_host}:{target_port} OK", file=sys.stderr)
 
         atyp = resp[3]
         if atyp == 0x01:  # IPv4
