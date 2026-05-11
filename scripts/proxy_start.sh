@@ -41,7 +41,7 @@ vm_num="${vm_num:-1}"
 PROXY_PORT=$(( 12320 + vm_num ))
 
 # Generate unique session per VM
-SESSION_ID="$(date +%s)_${vm_num}_$(head -c4 /dev/urandom | xxd -p)"
+SESSION_ID="vm${vm_num}$(head -c8 /dev/urandom | xxd -p)"
 
 # Kill any existing proxy on this port
 pkill -f "proxy_forwarder.*--port $PROXY_PORT" 2>/dev/null || true
@@ -50,7 +50,7 @@ sleep 1
 
 if [[ "$MODE" == "socks5" ]]; then
     SOCKS5_UPSTREAM="${SOCKS5_UPSTREAM:-gw-98959.coldproxy.com:32466}"
-    SOCKS5_AUTH_BASE="${SOCKS5_AUTH_BASE:-ljicgofzvs_98959-package-ipv4residential-country-US-session-REPLACE-time-3600s:P2bcaWxtPjmKH}"
+    SOCKS5_AUTH_BASE="${SOCKS5_AUTH_BASE:-ljicgofzvs_98959-package-ipv4residential-country-US-session-REPLACE-time-3600s-udp-true:P2bcaWxtPjmKH}"
 
     SOCKS5_AUTH_USER="$(echo "$SOCKS5_AUTH_BASE" | cut -d: -f1 | sed "s/REPLACE/${SESSION_ID}/")"
     SOCKS5_AUTH_PASS="$(echo "$SOCKS5_AUTH_BASE" | cut -d: -f2)"
@@ -68,7 +68,7 @@ if [[ "$MODE" == "socks5" ]]; then
 elif [[ "$MODE" == "http" ]]; then
     PROXY_UPSTREAM="${PROXY_UPSTREAM:-geo.iproyal.com:12321}"
     PROXY_AUTH_BASE="${PROXY_AUTH_BASE:-1kTBtpMnjijH4RH7:yNdruyJEECMTiwu2_country-us}"
-    PROXY_AUTH="${PROXY_AUTH_BASE}_session-${SESSION_ID}_lifetime-10m"
+    PROXY_AUTH="${PROXY_AUTH_BASE}_session-${SESSION_ID}_lifetime-20m"
 
     echo "[http-proxy] VM: $VM_DIR  Port: $PROXY_PORT"
     echo "[http-proxy] Upstream: $PROXY_UPSTREAM"
