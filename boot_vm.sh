@@ -91,8 +91,15 @@ wait_for_ssh
 
 # ── Configure proxy on device ─────────────────────────────────────────────────
 if [[ $PROXY -eq 1 ]]; then
+    sleep 3
     log "Configuring device proxy → 192.168.64.1:$PROXY_PORT"
-    zsh scripts/proxy_setup_device.sh "$VM_DIR" || warn "proxy_setup_device.sh exited non-zero — check output above"
+    for proxy_attempt in 1 2 3; do
+        if zsh scripts/proxy_setup_device.sh "$VM_DIR"; then
+            break
+        fi
+        warn "proxy_setup_device.sh attempt $proxy_attempt failed, retrying in 5s..."
+        sleep 5
+    done
 else
     log "Clearing device proxy (no --proxy flag)"
     zsh scripts/proxy_clear_device.sh "$VM_DIR" || true
