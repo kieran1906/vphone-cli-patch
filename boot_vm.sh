@@ -109,6 +109,7 @@ fi
 log "Starting Frida tunnel → localhost:$FRIDA_LOCAL_PORT"
 sshpass -p alpine ssh \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -o PubkeyAuthentication=no \
     -o ConnectTimeout=10 -o ServerAliveInterval=30 \
     -N -L "${FRIDA_LOCAL_PORT}:127.0.0.1:27042" \
     -p "$SSH_PORT" "root@127.0.0.1" &
