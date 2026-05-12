@@ -1,6 +1,6 @@
 #!/bin/zsh
-# clone_vm.sh — Clone an existing provisioned VM, boot it, and optionally
-#               install tweaks (.deb) and IPAs over SSH.
+# clone_vm.sh — Clone an existing provisioned VM, boot it, wipe browser/identity
+#               state, and optionally install tweaks (.deb) and IPAs over SSH.
 #
 # Usage:
 #   ./clone_vm.sh <SOURCE_VM> <NEW_VM> [--tweaks "url1 url2 ..."] [--ipas "url1 url2 ..."]
@@ -65,12 +65,6 @@ plutil -replace machineIdentifier -data "" "$DST/config.plist"
 
 log "Clone complete."
 
-# ── No installs requested — print hint and exit ───────────────────────────────
-if [[ ${#TWEAKS_URLS[@]} -eq 0 && ${#IPAS_URLS[@]} -eq 0 ]]; then
-    log "Done — boot with: ./boot_vm.sh $DST [--proxy]"
-    exit 0
-fi
-
 # ── SSH helpers ───────────────────────────────────────────────────────────────
 vm_num="${DST//[^0-9]/}"
 vm_num="${vm_num:-1}"
@@ -78,7 +72,7 @@ SSH_PORT=$(( 2230 + vm_num ))
 SSH_HOST="127.0.0.1"
 SSH_USER="root"
 SSH_PASS="alpine"
-SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -o IdentitiesOnly=yes)
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o IdentitiesOnly=yes -o PreferredAuthentications=password -o ConnectTimeout=10 -o LogLevel=ERROR)
 
 ssh_cmd() {
     sshpass -p "$SSH_PASS" ssh "${SSH_OPTS[@]}" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "$@"
@@ -98,6 +92,9 @@ wait_for_ssh() {
     done
     die "SSH on port $SSH_PORT did not become available after 10 min"
 }
+
+# ── Clear stale SSH known_hosts entry for this port ──────────────────────────
+ssh-keygen -R "[127.0.0.1]:${SSH_PORT}" 2>/dev/null || true
 
 # ── Boot ──────────────────────────────────────────────────────────────────────
 log "Booting $DST (SSH port: $SSH_PORT)..."
@@ -149,9 +146,52 @@ if [[ ${#IPAS_URLS[@]} -gt 0 ]]; then
     log "IPAs installed."
 fi
 
+# ── Wipe browser & identity state ─────────────────────────────────────────────
+log "Wiping browser and identity state..."
+ssh_cmd '
+killall Safari mobilesafarid 2>/dev/null || true
+
+# Nuke entire Safari directory and recreate empty
+rm -rf /var/mobile/Library/Safari
+mkdir -p /var/mobile/Library/Safari
+
+# Cookies
+rm -f /var/mobile/Library/Cookies/Cookies.binarycookies \
+      /var/mobile/Library/Cookies/com.apple.Safari.SafeBrowsing.binarycookies \
+      2>/dev/null || true
+
+# WebKit storage (localStorage, IndexedDB, service workers, HSTS)
+rm -rf /var/mobile/Library/WebKit 2>/dev/null || true
+
+# Safari cache
+rm -rf /var/mobile/Library/Caches/com.apple.Safari 2>/dev/null || true
+
+# Safari preferences (autofill, saved form data, per-site settings)
+rm -f /var/mobile/Library/Preferences/com.apple.Safari.plist \
+      /var/mobile/Library/Preferences/com.apple.SafariServices.plist \
+      /var/mobile/Library/Preferences/com.apple.SafariBookmarksSyncAgent.plist \
+      /var/mobile/Library/Preferences/com.apple.Safari.SafeBrowsing.plist \
+      2>/dev/null || true
+
+# Keychain — web credentials only (genp=generic, inet=internet passwords)
+# Skip cert/keys tables to avoid breaking SSH host keys
+find /var/Keychains -name "*.db" -type f 2>/dev/null | while read db; do
+    sqlite3 "$db" "DELETE FROM genp WHERE agrp NOT LIKE '%apple%' AND agrp NOT LIKE '%ssh%';
+                   DELETE FROM inet;" 2>/dev/null || true
+done
+
+# TLS session ticket cache
+rm -rf /var/mobile/Library/Caches/com.apple.NetworkServiceProxy 2>/dev/null || true
+
+# DNS cache flush
+killall mDNSResponder 2>/dev/null || true
+
+echo "[+] Browser and identity state wiped"
+' || warn "State wipe failed — continuing"
+
 # ── Refresh SpringBoard app cache ─────────────────────────────────────────────
 log "Refreshing app cache (uicache)..."
-ssh_cmd "uicache 2>/dev/null || true" || true
+ssh_cmd "uicache -a 2>/dev/null || true" || true
 
 log "All done. $DST is running on SSH port $SSH_PORT."
 log "  ssh root@$SSH_HOST -p $SSH_PORT   (pass: $SSH_PASS)"

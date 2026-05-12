@@ -27,11 +27,12 @@ warn() { echo -e "${YELLOW}[boot]${NC} $*"; }
 info() { echo -e "${BLUE}[boot]${NC} $*"; }
 die()  { echo -e "${RED}[boot] FATAL:${NC} $*"; exit 1; }
 
-VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy-mode socks5|http] [--proxy-line host:port:user:pass] [--webrtc-disable] [--timezone TZ]}"
+VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy-mode socks5|http] [--proxy-line host:port:user:pass] [--webrtc-disable] [--timezone TZ] [--clear-safari]}"
 PROXY_MODE=""
 PROXY_LINE=""
 DISABLE_WEBRTC=0
 TIMEZONE=""
+CLEAR_SAFARI=0
 
 shift
 while [[ $# -gt 0 ]]; do
@@ -40,6 +41,7 @@ while [[ $# -gt 0 ]]; do
         --proxy-line) PROXY_LINE="${2:?--proxy-line requires host:port:user:pass}"; shift 2 ;;
         --webrtc-disable) DISABLE_WEBRTC=1; shift ;;
         --timezone) TIMEZONE="${2:?--timezone requires a timezone e.g. America/New_York}"; shift 2 ;;
+        --clear-safari) CLEAR_SAFARI=1; shift ;;
         *) die "Unknown argument: $1" ;;
     esac
 done
@@ -73,7 +75,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ── SSH helpers ───────────────────────────────────────────────────────────────
-SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -o IdentitiesOnly=yes)
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o ConnectTimeout=3 -o IdentitiesOnly=yes)
 
 ssh_cmd() {
     sshpass -p alpine ssh "${SSH_OPTS[@]}" -p "$SSH_PORT" "root@127.0.0.1" "$@"
@@ -123,13 +125,59 @@ else
     zsh scripts/proxy_clear_device.sh "$VM_DIR" || true
 fi
 
+# ── Clear Safari identity ─────────────────────────────────────────────────────
+if [[ $CLEAR_SAFARI -eq 1 ]]; then
+    log "Clearing Safari and identity state..."
+    ssh_cmd '
+killall Safari mobilesafarid 2>/dev/null || true
+rm -rf /var/mobile/Library/Safari
+mkdir -p /var/mobile/Library/Safari
+rm -f /var/mobile/Library/Cookies/Cookies.binarycookies \
+      /var/mobile/Library/Cookies/com.apple.Safari.SafeBrowsing.binarycookies
+rm -rf /var/mobile/Library/WebKit
+rm -rf /var/mobile/Library/Caches/com.apple.Safari
+rm -f /var/mobile/Library/Preferences/com.apple.Safari.plist \
+      /var/mobile/Library/Preferences/com.apple.SafariServices.plist \
+      /var/mobile/Library/Preferences/com.apple.SafariBookmarksSyncAgent.plist \
+      /var/mobile/Library/Preferences/com.apple.Safari.SafeBrowsing.plist
+find /var/Keychains -name "*.db" -type f 2>/dev/null | while read db; do
+    sqlite3 "$db" "DELETE FROM genp WHERE agrp NOT LIKE '"'"'%apple%'"'"' AND agrp NOT LIKE '"'"'%ssh%'"'"';
+                   DELETE FROM inet;" 2>/dev/null || true
+done
+rm -rf /var/mobile/Library/Caches/com.apple.NetworkServiceProxy
+killall mDNSResponder 2>/dev/null || true
+' || warn "Safari clear failed"
+    sleep 2  # wait for mDNSResponder restart before next SSH call
+fi
+
 # ── WebRTC ────────────────────────────────────────────────────────────────────
 if [[ $DISABLE_WEBRTC -eq 1 ]]; then
     log "Disabling WebRTC in Safari..."
-    zsh scripts/disable_webrtc.sh "$VM_DIR" || warn "disable_webrtc.sh failed — WebRTC IP leak possible"
+    ssh_cmd '
+MANAGED_DIR="/var/Managed Preferences/mobile"
+mkdir -p "$MANAGED_DIR"
+cat > "$MANAGED_DIR/com.apple.WebKit.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>WebKitPreferences.peerConnectionEnabled</key>
+  <false/>
+</dict>
+</plist>
+PLIST
+killall Safari 2>/dev/null || true
+killall mobilesafarid 2>/dev/null || true
+echo "[+] WebRTC disabled"
+' || warn "WebRTC disable failed — IP leak possible"
 else
     log "Re-enabling WebRTC in Safari (no --webrtc-disable)..."
-    zsh scripts/enable_webrtc.sh "$VM_DIR" || true
+    ssh_cmd '
+rm -f "/var/Managed Preferences/mobile/com.apple.WebKit.plist" 2>/dev/null || true
+killall Safari 2>/dev/null || true
+killall mobilesafarid 2>/dev/null || true
+echo "[+] WebRTC re-enabled"
+' || true
 fi
 
 # ── Timezone ──────────────────────────────────────────────────────────────────

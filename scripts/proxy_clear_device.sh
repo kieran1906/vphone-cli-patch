@@ -9,7 +9,7 @@ set -euo pipefail
 vm_num="${1//[^0-9]/}"
 vm_num="${vm_num:-1}"
 SSH_PORT=$(( 2230 + vm_num ))
-SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o IdentitiesOnly=yes -o PreferredAuthentications=password root@127.0.0.1 -p "$SSH_PORT")
+SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o ConnectTimeout=10 -o IdentitiesOnly=yes -o PreferredAuthentications=password root@127.0.0.1 -p "$SSH_PORT")
 
 "${SSH_CMD[@]}" "
 PREFS='/private/var/preferences/SystemConfiguration/preferences.plist'

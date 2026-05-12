@@ -29,7 +29,7 @@ die()  { echo -e "${RED}[trust] FATAL:${NC} $*"; exit 1; }
 SSH_PORT="${1:?Usage: ./scripts/trust_pair.sh <SSH_PORT>}"
 SSH_HOST="127.0.0.1"
 SSH_PASS="alpine"
-SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 -o IdentitiesOnly=yes)
+SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o ConnectTimeout=10 -o IdentitiesOnly=yes)
 LIMD="$(pwd)/.limd/bin"
 PAIRING_DIR="$HOME/.vphone/pairing"
 
