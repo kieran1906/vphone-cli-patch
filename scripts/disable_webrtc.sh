@@ -4,6 +4,9 @@
 # Prevents STUN/TURN IP leaks by disabling RTCPeerConnection entirely.
 # The device will report "WebRTC not supported" — normal for managed devices.
 #
+# Uses managed preferences (same mechanism as proxy config) — the only
+# reliable write path on this iOS VM setup.
+#
 # Usage (from Mac):
 #   ./scripts/disable_webrtc.sh vm3
 
@@ -15,7 +18,7 @@ vm_num="${VM_DIR//[^0-9]/}"
 vm_num="${vm_num:-1}"
 SSH_PORT=$(( 2230 + vm_num ))
 
-SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o ConnectTimeout=10 root@127.0.0.1 -p "$SSH_PORT")
+SSH_CMD=(sshpass -p alpine ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PubkeyAuthentication=no -o IdentitiesOnly=yes -o PreferredAuthentications=password -o ConnectTimeout=10 root@127.0.0.1 -p "$SSH_PORT")
 
 echo "[webrtc] VM: $VM_DIR  SSH: $SSH_PORT"
 
@@ -24,21 +27,26 @@ if ! "${SSH_CMD[@]}" "echo ok" 2>/dev/null | grep -q ok; then
     exit 1
 fi
 
-"${SSH_CMD[@]}" "
-# Disable WebRTC peer connection in all WebKit contexts
-defaults write com.apple.Safari WebKitPreferences.peerConnectionEnabled -bool false
-defaults write com.apple.WebKit WebKitPreferences.peerConnectionEnabled -bool false
+"${SSH_CMD[@]}" '
+MANAGED_DIR="/var/Managed Preferences/mobile"
+mkdir -p "$MANAGED_DIR"
 
-# Also set via nsud for good measure (covers mobile Safari)
-nsud set bool '/var/mobile/Library/Preferences/com.apple.Safari' WebKitPreferences.peerConnectionEnabled false 2>/dev/null || true
-nsud set bool '/var/mobile/Library/Preferences/com.apple.WebKit' WebKitPreferences.peerConnectionEnabled false 2>/dev/null || true
+cat > "$MANAGED_DIR/com.apple.WebKit.plist" << PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>WebKitPreferences.peerConnectionEnabled</key>
+  <false/>
+</dict>
+</plist>
+PLIST
 
-# Kill Safari so it picks up the new preferences on next launch
 killall Safari 2>/dev/null || true
 killall mobilesafarid 2>/dev/null || true
 
-echo '[+] WebRTC disabled (peerConnectionEnabled = false)'
-echo '[+] Safari killed — will pick up new prefs on next launch'
-" 2>&1
+echo "[+] WebRTC disabled via managed prefs"
+echo "[+] Safari killed — will pick up new prefs on next launch"
+' 2>&1
 
 echo "[webrtc] Done"

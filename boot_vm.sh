@@ -27,10 +27,11 @@ warn() { echo -e "${YELLOW}[boot]${NC} $*"; }
 info() { echo -e "${BLUE}[boot]${NC} $*"; }
 die()  { echo -e "${RED}[boot] FATAL:${NC} $*"; exit 1; }
 
-VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy-mode socks5|http] [--proxy-line host:port:user:pass] [--webrtc-disable]}"
+VM_DIR="${1:?Usage: ./boot_vm.sh <VM_DIR> [--proxy-mode socks5|http] [--proxy-line host:port:user:pass] [--webrtc-disable] [--timezone TZ]}"
 PROXY_MODE=""
 PROXY_LINE=""
 DISABLE_WEBRTC=0
+TIMEZONE=""
 
 shift
 while [[ $# -gt 0 ]]; do
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
         --proxy-mode) PROXY_MODE="${2:?--proxy-mode requires socks5 or http}"; shift 2 ;;
         --proxy-line) PROXY_LINE="${2:?--proxy-line requires host:port:user:pass}"; shift 2 ;;
         --webrtc-disable) DISABLE_WEBRTC=1; shift ;;
+        --timezone) TIMEZONE="${2:?--timezone requires a timezone e.g. America/New_York}"; shift 2 ;;
         *) die "Unknown argument: $1" ;;
     esac
 done
@@ -121,10 +123,19 @@ else
     zsh scripts/proxy_clear_device.sh "$VM_DIR" || true
 fi
 
-# ── Disable WebRTC (prevent STUN IP leak) ─────────────────────────────────────
+# ── WebRTC ────────────────────────────────────────────────────────────────────
 if [[ $DISABLE_WEBRTC -eq 1 ]]; then
     log "Disabling WebRTC in Safari..."
     zsh scripts/disable_webrtc.sh "$VM_DIR" || warn "disable_webrtc.sh failed — WebRTC IP leak possible"
+else
+    log "Re-enabling WebRTC in Safari (no --webrtc-disable)..."
+    zsh scripts/enable_webrtc.sh "$VM_DIR" || true
+fi
+
+# ── Timezone ──────────────────────────────────────────────────────────────────
+if [[ -n "$TIMEZONE" ]]; then
+    log "Setting timezone → $TIMEZONE"
+    zsh scripts/set_timezone.sh "$VM_DIR" "$TIMEZONE" || warn "set_timezone.sh failed"
 fi
 
 # ── Frida SSH tunnel ──────────────────────────────────────────────────────────
