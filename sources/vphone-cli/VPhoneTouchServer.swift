@@ -6,9 +6,10 @@ import Foundation
 ///
 /// Listens at /tmp/vphone-touch.sock.
 /// Protocol: newline-delimited JSON.
-///   tap:   {"t":"tap",  "x":215, "y":400}
-///   swipe: {"t":"swipe","x1":215,"y1":800,"x2":215,"y2":100,"steps":20}
-///   home:  {"t":"home"}
+///   tap:        {"t":"tap",  "x":215, "y":400}
+///   swipe:      {"t":"swipe","x1":215,"y1":800,"x2":215,"y2":100,"steps":20}
+///   home:       {"t":"home"}
+///   type_text:  {"t":"type_text","text":"hello world"}
 /// Response: {"ok":true} or {"ok":false,"error":"..."}
 final class VPhoneTouchServer {
     let socketPath: String
@@ -154,6 +155,11 @@ final class VPhoneTouchServer {
             return true
         case "home":
             keyHelper?.sendHome()
+            return true
+        case "type_text":
+            guard let text = cmd["text"] as? String else { return false }
+            guard let kh = keyHelper else { return false }
+            kh.typeString(text)
             return true
         default:
             return false

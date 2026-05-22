@@ -148,6 +148,17 @@ python3 device.py --ssh-port 2235 swipe left            # swipe left
 python3 device.py --ssh-port 2235 swipe 215 700 215 200
 ```
 
+### Type text
+
+Tap a text field first, then type into it:
+
+```bash
+python3 device.py --ssh-port 2235 tap 215 300
+python3 device.py --ssh-port 2235 type_text 'hello world'
+```
+
+Supports a-z, A-Z, 0-9, common punctuation, space, tab, and newline. Characters are injected as USB key events at ~20ms intervals via the virtual keyboard — looks like real typing to the app.
+
 ### Home button
 
 ```bash
@@ -204,6 +215,7 @@ device.tap_text('Continue')                      # OCR tap
 device.tap_label('Safari')                       # accessibility tap
 device.swipe('down')                             # scroll preset
 device.home()                                    # home button
+device.type_text('hello world')                  # type into focused field
 device.launch_app('com.apple.mobilesafari')      # open app
 device.close_app('com.apple.mobilesafari')       # kill app
 device.screenshot('screen.png')                  # save screenshot

@@ -376,6 +376,20 @@ def home():
     return _socket_cmd({"t": "home"})
 
 
+def type_text(text):
+    """Type ASCII text into the focused field via virtual keyboard.
+
+    Characters are injected as USB key events at ~20ms intervals.
+    The field must already be focused (tap it first).
+    Supports a-z, A-Z, 0-9, common punctuation, space, tab, and newline.
+    """
+    if _socket_cmd({"t": "type_text", "text": str(text)}):
+        print(f"[device] typed {len(text)} chars")
+        return True
+    print("[device] type_text failed: socket unavailable", file=sys.stderr)
+    return False
+
+
 def _socket_cmd_result(cmd: dict):
     """Like _socket_cmd but returns the full response dict (or None on error)."""
     try:
@@ -739,6 +753,7 @@ COMMANDS
   swipe PRESET          Scroll/swipe using a named preset (see below)
   swipe X1 Y1 X2 Y2    Swipe from one point to another
   home                  Press the Home button
+  type_text 'string'    Type text into the focused field (ASCII, tap field first)
   launch_app BUNDLE_ID  Launch an app by bundle ID
   close_app BUNDLE_ID   Terminate an app by bundle ID
   screenshot [path]     Save a screenshot (default: screenshot.png)
@@ -765,6 +780,7 @@ EXAMPLES
   python3 device.py swipe down
   python3 device.py swipe up_long
   python3 device.py home
+  python3 device.py type_text 'hello world'
   python3 device.py launch_app com.apple.mobilesafari
   python3 device.py close_app com.apple.mobilesafari
   python3 device.py screenshot screen.png
@@ -825,6 +841,9 @@ if __name__ == "__main__":
     elif cmd == "home":
         result = home()
         print(f"home result: {result}")
+    elif cmd == "type_text" and len(args) == 2:
+        result = type_text(args[1])
+        print(f"type_text result: {result}")
     elif cmd == "launch_app" and len(args) == 2:
         launch_app(args[1])
     elif cmd == "close_app" and len(args) == 2:
