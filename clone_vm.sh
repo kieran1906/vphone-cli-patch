@@ -103,6 +103,10 @@ make VM_DIR="$DST" boot > "/tmp/vphone_boot_${DST}.log" 2>&1 &
 
 wait_for_ssh
 
+# ── Trust pair (suppress Trust dialog for this clone) ─────────────────────────
+log "Running trust pair..."
+zsh scripts/trust_pair.sh "$SSH_PORT" 2>&1 || warn "trust_pair.sh failed — Trust dialog may appear"
+
 # ── Ensure trollstorehelper is on PATH ────────────────────────────────────────
 log "Checking trollstorehelper..."
 ssh_cmd 'readlink /var/jb' > /dev/null 2>&1 || warn "  /var/jb not ready — trollstorehelper lookup will use find fallback"
