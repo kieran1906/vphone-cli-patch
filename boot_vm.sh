@@ -130,21 +130,88 @@ if [[ $CLEAR_SAFARI -eq 1 ]]; then
     log "Clearing Safari and identity state..."
     ssh_cmd '
 killall Safari mobilesafarid 2>/dev/null || true
-rm -rf /var/mobile/Library/Safari
-mkdir -p /var/mobile/Library/Safari
+
+# Safari browsing data — surgical: specific files, keep directory structure
+rm -f /var/mobile/Library/Safari/History.db \
+      /var/mobile/Library/Safari/History.db-shm \
+      /var/mobile/Library/Safari/History.db-wal \
+      /var/mobile/Library/Safari/HistoryIndex.skindex \
+      /var/mobile/Library/Safari/RecentSearches.plist \
+      /var/mobile/Library/Safari/BrowserState.db \
+      /var/mobile/Library/Safari/BrowserState.db-shm \
+      /var/mobile/Library/Safari/BrowserState.db-wal \
+      /var/mobile/Library/Safari/SafariTabs.db \
+      /var/mobile/Library/Safari/SafariTabs.db-shm \
+      /var/mobile/Library/Safari/SafariTabs.db-wal \
+      /var/mobile/Library/Safari/Bookmarks.db \
+      /var/mobile/Library/Safari/SuspendedTabs.plist \
+      /var/mobile/Library/Safari/CloudTabsCache.plist
+rm -rf /var/mobile/Library/Safari/Thumbnails \
+       /var/mobile/Library/Safari/PerSitePreferences
+
+# Cookies
 rm -f /var/mobile/Library/Cookies/Cookies.binarycookies \
       /var/mobile/Library/Cookies/com.apple.Safari.SafeBrowsing.binarycookies
-rm -rf /var/mobile/Library/WebKit
+
+# WebKit website data only — keep WebKit directory itself (Safari needs its internals)
+rm -rf /var/mobile/Library/WebKit/WebsiteData
+
+# Safari caches
 rm -rf /var/mobile/Library/Caches/com.apple.Safari
-rm -f /var/mobile/Library/Preferences/com.apple.Safari.plist \
-      /var/mobile/Library/Preferences/com.apple.SafariServices.plist \
-      /var/mobile/Library/Preferences/com.apple.SafariBookmarksSyncAgent.plist \
-      /var/mobile/Library/Preferences/com.apple.Safari.SafeBrowsing.plist
+
+# Keychain — non-Apple, non-SSH entries
 find /var/Keychains -name "*.db" -type f 2>/dev/null | while read db; do
     sqlite3 "$db" "DELETE FROM genp WHERE agrp NOT LIKE '"'"'%apple%'"'"' AND agrp NOT LIKE '"'"'%ssh%'"'"';
                    DELETE FROM inet;" 2>/dev/null || true
 done
+
 rm -rf /var/mobile/Library/Caches/com.apple.NetworkServiceProxy
+
+# Siri suggestions / search history
+rm -rf /var/mobile/Library/Suggestions
+rm -rf /var/mobile/Library/CoreDuet
+
+# Keyboard learned words
+rm -f /var/mobile/Library/Keyboard/user_model_database.sqlite \
+      /var/mobile/Library/Keyboard/user_model_database.sqlite-shm \
+      /var/mobile/Library/Keyboard/user_model_database.sqlite-wal
+rm -rf /var/mobile/Library/Keyboard/en-dynamic.lm \
+       /var/mobile/Library/Keyboard/mul-dynamic.lm
+
+# Biome — on-device activity streams that power Safari recent searches
+BIOME=/var/mobile/Library/Biome/streams/restricted
+rm -rf "$BIOME/Safari.Navigations" \
+       "$BIOME/Safari.PageLoad" \
+       "$BIOME/Safari.WebPagePerformance" \
+       "$BIOME/ProactiveHarvesting.Safari.PageView" \
+       "$BIOME/UniversalRecents.UserActivity.Metadata" \
+       "$BIOME/App.WebUsage" \
+       "$BIOME/App.Activity"
+
+# DuetExpertCenter — Siri intelligence / website suggestion caches
+DUET=/var/mobile/Library/DuetExpertCenter
+rm -rf "$DUET/WebsiteTitlesAndSubtitlesCache" \
+       "$DUET/WebsiteSuggestionsVerticalModelCache"
+# These files may be held open by duetexpertd — truncate instead of delete
+# so the running process sees an empty file; rm handles the unlocked ones
+for f in "$DUET/_ATXDataStore.db" "$DUET/_ATXDataStore.db-shm" "$DUET/_ATXDataStore.db-wal" \
+         "$DUET/_ATXInfoSuggestionStore.db" "$DUET/_ATXInfoSuggestionStore.db-shm" "$DUET/_ATXInfoSuggestionStore.db-wal" \
+         "$DUET/notificationAndSuggestionDB.db" "$DUET/notificationAndSuggestionDB.db-shm" "$DUET/notificationAndSuggestionDB.db-wal"; do
+    [ -f "$f" ] && : > "$f" || true
+done
+
+# Seymour — on-device ML databases containing web history
+SEYMOUR=/var/mobile/Library/Seymour
+rm -f "$SEYMOUR/seymour_b.sqlite" "$SEYMOUR/seymour_b.sqlite-shm" "$SEYMOUR/seymour_b.sqlite-wal" \
+      "$SEYMOUR/seymour_c.sqlite" "$SEYMOUR/seymour_c.sqlite-shm" "$SEYMOUR/seymour_c.sqlite-wal" \
+      "$SEYMOUR/seymour_d.sqlite" "$SEYMOUR/seymour_d.sqlite-shm" "$SEYMOUR/seymour_d.sqlite-wal"
+
+# Spotlight — web content indexed from browsing
+rm -rf /var/mobile/Library/Spotlight/CoreSpotlight/Priority
+
+# Kill daemons AFTER deleting their stores — so launchd respawns them with empty data
+killall biomed suggestd duetexpertd seymourserviced 2>/dev/null || true
+
 killall mDNSResponder 2>/dev/null || true
 ' || warn "Safari clear failed"
     sleep 2  # wait for mDNSResponder restart before next SSH call

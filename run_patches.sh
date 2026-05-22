@@ -37,9 +37,12 @@ copy_file() {
     log "  $rel"
 }
 
-# ── Scripts ────────────────────────────────────────────────────────────────────
+# ── Docs ──────────────────────────────────────────────────────────────────────
 copy_file "CLAUDE.local.md"
 copy_file "VPHONE-CLI_SETUP-GUIDE.md"
+copy_file "QUICKSTART_CLONE_AND_BOOT.md"
+
+# ── Scripts ────────────────────────────────────────────────────────────────────
 copy_file "provision_device.sh"
 copy_file "scripts/boot_proxy.sh"
 copy_file "boot_vm.sh"
@@ -62,12 +65,15 @@ copy_file "scripts/vphone_sshd_start.sh"
 
 # ── Python automation ──────────────────────────────────────────────────────────
 copy_file "device.py"
+copy_file "mac_tap.py"
+copy_file "test_device.py"
 
 # ── Frida agents (TypeScript source + pre-compiled JS) ────────────────────────
 copy_file "agent/screenshot.ts"
 copy_file "agent/screenshot_agent.js"
 copy_file "agent/accessibility.ts"
 copy_file "agent/accessibility_agent.js"
+copy_file "package.json"
 
 # ── Swift source files ─────────────────────────────────────────────────────────
 copy_file "sources/vphone-cli/VPhoneAppDelegate.swift"

@@ -8,14 +8,15 @@
 # Args:
 #   <SOURCE_VM>     Existing VM directory to clone from
 #   <NEW_VM>        Name for the new VM directory
-#   --tweaks "..."  Space-separated list of .deb URLs to install (optional)
-#   --ipas   "..."  Space-separated list of .ipa URLs to install (optional)
+#   --tweaks "..."  Space-separated list of .deb URLs or local paths to install (optional)
+#   --ipas   "..."  Space-separated list of .ipa URLs or local paths to install (optional)
 #
 # Examples:
 #   ./clone_vm.sh vm2 vm3
-#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/tweak1.deb https://example.com/tweak2.deb"
+#   ./clone_vm.sh vm2 vm3 --ipas "/path/to/app.ipa"
 #   ./clone_vm.sh vm2 vm3 --ipas "https://example.com/app.ipa"
-#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/t.deb" --ipas "https://example.com/app.ipa"
+#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/tweak1.deb /local/tweak2.deb"
+#   ./clone_vm.sh vm2 vm3 --tweaks "https://example.com/t.deb" --ipas "/path/to/app.ipa"
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -110,19 +111,31 @@ ssh_cmd 'readlink /var/jb' > /dev/null 2>&1 || warn "  /var/jb not ready — tro
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
+# fetch_file <src> <dest> — copies a local path or downloads a URL to <dest>
+fetch_file() {
+    local src="$1" dest="$2"
+    if [[ -f "$src" ]]; then
+        log "  Copying local file: $src"
+        cp "$src" "$dest"
+    else
+        log "  Downloading: $src"
+        curl -fsSL -o "$dest" "$src" || die "Failed to download: $src"
+    fi
+}
+
 # ── Install tweaks (.deb) ─────────────────────────────────────────────────────
 if [[ ${#TWEAKS_URLS[@]} -gt 0 ]]; then
     log "Installing ${#TWEAKS_URLS[@]} tweak(s)..."
     i=0
-    for url in "${TWEAKS_URLS[@]}"; do
+    for src in "${TWEAKS_URLS[@]}"; do
         i=$(( i + 1 ))
         deb="$TEMP_DIR/tweak_${i}.deb"
-        log "  [$i/${#TWEAKS_URLS[@]}] Downloading: $url"
-        curl -fsSL -o "$deb" "$url" || die "Failed to download: $url"
+        log "  [$i/${#TWEAKS_URLS[@]}]"
+        fetch_file "$src" "$deb"
         scp_to "$deb" "/tmp/tweak_${i}.deb"
         log "  [$i/${#TWEAKS_URLS[@]}] Installing..."
         ssh_cmd "dpkg -i /tmp/tweak_${i}.deb; apt --fix-broken install -y -qq 2>/dev/null || true; rm -f /tmp/tweak_${i}.deb" \
-            || warn "Install failed for $(basename "$url") — continuing"
+            || warn "Install failed for $(basename "$src") — continuing"
     done
     log "Tweaks installed."
 fi
@@ -131,17 +144,17 @@ fi
 if [[ ${#IPAS_URLS[@]} -gt 0 ]]; then
     log "Installing ${#IPAS_URLS[@]} IPA(s)..."
     i=0
-    for url in "${IPAS_URLS[@]}"; do
+    for src in "${IPAS_URLS[@]}"; do
         i=$(( i + 1 ))
         ipa="$TEMP_DIR/app_${i}.ipa"
-        log "  [$i/${#IPAS_URLS[@]}] Downloading: $url"
-        curl -fsSL -o "$ipa" "$url" || die "Failed to download: $url"
+        log "  [$i/${#IPAS_URLS[@]}]"
+        fetch_file "$src" "$ipa"
         scp_to "$ipa" "/tmp/app_${i}.ipa"
         log "  [$i/${#IPAS_URLS[@]}] Installing..."
         rc=0
         ssh_cmd "tsh=\$(find \$(readlink /var/jb) -name trollstorehelper -type f 2>/dev/null | head -1) && \"\$tsh\" install /tmp/app_${i}.ipa; rm -f /tmp/app_${i}.ipa" || rc=$?
         # exit 184 = app has encrypted extensions but main app installed fine
-        [[ $rc -eq 0 || $rc -eq 184 ]] || warn "trollstorehelper failed (exit $rc) for $(basename "$url") — continuing"
+        [[ $rc -eq 0 || $rc -eq 184 ]] || warn "trollstorehelper failed (exit $rc) for $(basename "$src") — continuing"
     done
     log "IPAs installed."
 fi
