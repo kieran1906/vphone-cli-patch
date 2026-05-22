@@ -39,10 +39,11 @@ When `--tweaks` or `--ipas` are provided, clone_vm.sh will:
 1. APFS-clone the source VM
 2. Boot the new VM automatically
 3. Wait for SSH to come up
-4. Download and install each `.deb` via `dpkg`
-5. Download and install each `.ipa` via `trollstorehelper`
-6. Wipe all browser/identity state (Safari history, cookies, WebKit storage, keychain web creds, DNS cache)
-7. Run `uicache` to refresh the app grid
+4. Run `trust_pair.sh` to pair the new UDID (no Trust dialog)
+5. Download and install each `.deb` via `dpkg`
+6. Download and install each `.ipa` via `trollstorehelper`
+7. Wipe all browser/identity state (Safari history, cookies, WebKit storage, keychain web creds, DNS cache)
+8. Run `uicache` to refresh the app grid
 
 IPAs are installed via TrollStore (pre-installed on every device). Tweaks are installed via dpkg/apt.
 
@@ -230,9 +231,9 @@ For most use cases, prefer `device.py` — it works with the window hidden or mi
 
 Trust pairing is handled automatically — you shouldn't need to do anything manually:
 
-- **On every boot**, `boot_proxy.sh` auto-taps the Trust dialog button via `device.py` ~4 seconds after the device appears. This works even if the pair record is missing.
-- **When cloning**, the source VM's pair record is cloned with the disk image, so the Trust dialog usually never appears at all.
-- **`trust_pair.sh`** pre-seeds the lockdownd pair record properly (both device-side and Mac-side) so the dialog is permanently suppressed. Only needed if you're having pairing issues:
+- **When cloning**, `clone_vm.sh` runs `trust_pair.sh` automatically after SSH comes up — pairs the new UDID on both device and Mac side.
+- **On every boot**, `boot_proxy.sh` auto-taps the Trust dialog button via `device.py` ~4 seconds after the device appears, as a fallback.
+- **`trust_pair.sh`** can also be run manually if you're having pairing issues:
 
 ```bash
 ./scripts/trust_pair.sh 2235   # port = 2230 + VM number
