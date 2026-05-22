@@ -113,7 +113,7 @@ trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # fetch_file <src> <dest> — copies a local path or downloads a URL to <dest>
 fetch_file() {
-    local src="$1" dest="$2"
+    local src="${1/#\~/$HOME}" dest="$2"
     if [[ -f "$src" ]]; then
         log "  Copying local file: $src"
         cp "$src" "$dest"
