@@ -41,6 +41,7 @@ copy_file() {
 copy_file "CLAUDE.local.md"
 copy_file "VPHONE-CLI_SETUP-GUIDE.md"
 copy_file "QUICKSTART_CLONE_AND_BOOT.md"
+copy_file "TWEAKLOADER.md"
 
 # ── Scripts ────────────────────────────────────────────────────────────────────
 copy_file "provision_device.sh"
@@ -62,6 +63,10 @@ copy_file "scripts/setup_tools.sh"
 copy_file "scripts/setup_venv.sh"
 copy_file "scripts/vphone_jb_setup.sh"
 copy_file "scripts/vphone_sshd_start.sh"
+
+# ── TweakLoader (substrate-compatible tweak injection) ─────────────────────────
+copy_file "scripts/tweakloader/TweakLoader.m"
+copy_file "scripts/tweakloader/README.md"
 
 # ── Python automation ──────────────────────────────────────────────────────────
 copy_file "device.py"
